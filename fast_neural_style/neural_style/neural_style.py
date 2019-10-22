@@ -49,23 +49,62 @@ def train(args):
 
     vgg = Vgg16(requires_grad=False).to(device)
     style_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Lambda(lambda x: x.mul(255))
+        transforms.ToTensor(),                  # PIL image会转成Tensor，从（C*H*W）到（H*W*C），且从[0,255]到[0.0,1.0]。
+                                                # Converts a PIL Image or numpy.ndarray (H x W x C) in the range [0, 255] to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0] if the PIL Image belongs to one of the modes (L, LA, P, I, F, RGB, YCbCr, RGBA, CMYK, 1) or if the numpy.ndarray has dtype = np.uint8
+        transforms.Lambda(lambda x: x.mul(255)) # x中每个数乘以255，为什么？相当于只是转成tensor，但是每个值没有做归一化，范围还是在[0,255]
     ])
-    style = utils.load_image(args.style_image, size=args.style_size)
-    style = style_transform(style)
-    style = style.repeat(args.batch_size, 1, 1, 1).to(device)
-
-    features_style = vgg(utils.normalize_batch(style))
-    gram_style = [utils.gram_matrix(y) for y in features_style]
+    style = utils.load_image(args.style_image, size=args.style_size)    # args.style_image:default="images/style-images/mosaic.jpg"。args.style_size:default is the original size of style image
+    style = style_transform(style)                                      # 将PIL image进行transform，转成tensor
+    style = style.repeat(args.batch_size, 1, 1, 1).to(device)           # tensor的repeat.
+    # styleimage（examples/fast_neural_style/images/style-images/mosaic.jpg）
+    # 经过vgg16的预训练模型（下载vgg模型并加载了.pth），得到features_style
+    features_style = vgg(utils.normalize_batch(style))                  # features_style如下：
+                                                                        # VggOutputs(relu1_2=tensor([[[[0.0000, 1.2763, 3.2583, ..., 0.0000, 0.0000, 1.1532],
+                                                                        #                              [0.0000, 0.0000, 4.8556, ..., 0.0000, 0.0000, 0.0000],
+                                                                        #                              [0.0000, 0.0000, 0.0000, ..., 0.0000, 0.0000, 0.6969],
+                                                                        #                              ...,
+                                                                        #                              [1.4070, 1.7247, 0.0000, ..., 8.8745, 6.7917, 1.4484],
+                                                                        #                              [1.4567, 0.3573, 0.0000, ..., 0.0000, 9.0376, 7.9567],
+                                                                        #                              [0.9066, 0.0000, 0.0000, ..., 0.0000, 2.7535, 10.8945]],
+                                                                        #
+                                                                        #                             [[0.0000, 0.0000, 0.7368, ..., 0.0000, 0.0000, 0.0000],
+                                                                        #                              [0.0000, 0.0000, 0.0000, ..., 1.3038, 0.0000, 0.0000],
+                                                                        #                              [1.5022, 0.0000, 0.0000, ..., 1.3023, 0.0000, 0.0000],
+                                                                        #                              ...,
+                                                                        #                              [0.9290, 0.5096, 2.0468, ..., 0.6405, 5.2257, 0.0000],
+                                                                        #                              [3.0888, 3.1716, 0.9424, ..., 0.0000, 2.6377, 0.0000],
+                                                                        #                              [1.9257, 2.3722, 0.0000, ..., 0.0000, 0.0000, 0.0000]],
+                                                                        #
+                                                                        #                             [[0.0000, 0.0000, 1.4539, ..., 0.0000, 0.0000, 0.0000],
+                                                                        #                              [...
+    gram_style = [utils.gram_matrix(y) for y in features_style]         # 有四个y在features_style里，relu1_2,relu2_2,relu3_3,relu4_4。gram_style如下：
+                                                                        # [tensor([[[0.0839, 0.0138, 0.0385, ..., 0.0045, 0.0395, 0.0097],
+                                                                        #           [0.0138, 0.0268, 0.0177, ..., 0.0204, 0.0284, 0.0009],
+                                                                        #           [0.0385, 0.0177, 0.0624, ..., 0.0141, 0.0613, 0.0221],
+                                                                        #           ...,
+                                                                        #           [0.0045, 0.0204, 0.0141, ..., 0.0495, 0.0178, 0.0021],
+                                                                        #           [0.0395, 0.0284, 0.0613, ..., 0.0178, 0.1260, 0.0235],
+                                                                        #           [0.0097, 0.0009, 0.0221, ..., 0.0021, 0.0235, 0.2307]],
+                                                                        #
+                                                                        #          [[0.0839, 0.0138, 0.0385, ..., 0.0045, 0.0395, 0.0097],
+                                                                        #           [0.0138, 0.0268, 0.0177, ..., 0.0204, 0.0284, 0.0009],
+                                                                        #           [0.0385, 0.0177, 0.0624, ..., 0.0141, 0.0613, 0.0221],
+                                                                        #           ...,
+                                                                        #           [0.0045, 0.0204, 0.0141, ..., 0.0495, 0.0178, 0.0021],
+                                                                        #           [0.0395, 0.0284, 0.0613, ..., 0.0178, 0.1260, 0.0235],
+                                                                        #           [0.0097, 0.0009, 0.0221, ..., 0.0021, 0.0235, 0.2307]],
+                                                                        #
+                                                                        #          [[0.0839, 0.0138, 0.0385, ..., 0.0045, 0.0395, 0.0097],
+                                                                        #           [0.0138, 0.0268, 0.0177, ..., 0.0204, 0.0284, 0.0009],
+                                                                        #           [0.0385, 0.0177, 0.0624, ..., 0.0141, 0.0613, 0...
 
     for e in range(args.epochs):
-        transformer.train()
+        transformer.train()     # 训练本文提出的transformer模型
         agg_content_loss = 0.
         agg_style_loss = 0.
         count = 0
-        for batch_id, (x, _) in enumerate(train_loader):
-            n_batch = len(x)
+        for batch_id, (x, _) in enumerate(train_loader):    # (x, _)表示data，其中x表示？
+            n_batch = len(x)                                # n_batch到底表示什么？
             count += n_batch
             optimizer.zero_grad()
 
@@ -181,7 +220,7 @@ def main():
     train_arg_parser.add_argument("--dataset", type=str, required=True,
                                   help="path to training dataset, the path should point to a folder "
                                        "containing another folder with all the training images")
-    train_arg_parser.add_argument("--style-image", type=str, default="images/style-images/mosaic.jpg",
+    train_arg_parser.add_argument("--style-image", type=str, default="images/style-images/mosaic.jpg",  # mosaic.jpg大小为470*391
                                   help="path to style-image")
     train_arg_parser.add_argument("--save-model-dir", type=str, required=True,
                                   help="path to folder where trained model will be saved.")
