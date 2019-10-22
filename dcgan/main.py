@@ -102,11 +102,12 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batchSize,
 device = torch.device("cuda:0" if opt.cuda else "cpu")
 ngpu = int(opt.ngpu)
 nz = int(opt.nz)
-ngf = int(opt.ngf)
-ndf = int(opt.ndf)
+ngf = int(opt.ngf)#生成器中特征图的大小
+ndf = int(opt.ndf)#判别器中特征图的大小
 
 
 # custom weights initialization called on netG and netD
+# 所有模型权重应从正态分布中随机初始化，mean = 0，stdev = 0.02
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -122,6 +123,8 @@ class Generator(nn.Module):
         self.ngpu = ngpu
         self.main = nn.Sequential(
             # input is Z, going into a convolution
+            # Z是噪声，即noise = torch.randn(batch_size, nz, 1, 1, device=device)
+            # Z的大小为(batch_size, nz, 1, 1）所以最开始图像的大小为1×1,通道为nz，即100
             nn.ConvTranspose2d(     nz, ngf * 8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ngf * 8),
             nn.ReLU(True),
@@ -198,6 +201,7 @@ if opt.netD != '':
     netD.load_state_dict(torch.load(opt.netD))
 print(netD)
 
+#Creates a criterion that measures the Binary Cross Entropy between the target and the output
 criterion = nn.BCELoss()
 
 fixed_noise = torch.randn(opt.batchSize, nz, 1, 1, device=device)
