@@ -4,20 +4,20 @@ import torch
 class TransformerNet(torch.nn.Module):
     def __init__(self):
         super(TransformerNet, self).__init__()
-        # Initial convolution layers
+        # Initial convolution layers，三层卷积层，每层卷积后加InstanceNorm层
         self.conv1 = ConvLayer(3, 32, kernel_size=9, stride=1)
         self.in1 = torch.nn.InstanceNorm2d(32, affine=True)
         self.conv2 = ConvLayer(32, 64, kernel_size=3, stride=2)
         self.in2 = torch.nn.InstanceNorm2d(64, affine=True)
         self.conv3 = ConvLayer(64, 128, kernel_size=3, stride=2)
         self.in3 = torch.nn.InstanceNorm2d(128, affine=True)
-        # Residual layers
+        # Residual layers，5个残差块，每个残差块为128层
         self.res1 = ResidualBlock(128)
         self.res2 = ResidualBlock(128)
         self.res3 = ResidualBlock(128)
         self.res4 = ResidualBlock(128)
         self.res5 = ResidualBlock(128)
-        # Upsampling Layers
+        # Upsampling Layers，两个自己定义的上采样层，每个上采样层后加InstanceNorm层
         self.deconv1 = UpsampleConvLayer(128, 64, kernel_size=3, stride=1, upsample=2)
         self.in4 = torch.nn.InstanceNorm2d(64, affine=True)
         self.deconv2 = UpsampleConvLayer(64, 32, kernel_size=3, stride=1, upsample=2)

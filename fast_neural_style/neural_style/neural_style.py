@@ -34,7 +34,7 @@ def train(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    transform = transforms.Compose([
+    transform = transforms.Compose([            # 针对数据集的transform，数据集中有很多张图片，使用dataloader进行枚举
         transforms.Resize(args.image_size),
         transforms.CenterCrop(args.image_size),
         transforms.ToTensor(),
@@ -43,12 +43,12 @@ def train(args):
     train_dataset = datasets.ImageFolder(args.dataset, transform)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size)
 
-    transformer = TransformerNet().to(device)
+    transformer = TransformerNet().to(device)   # 定义的TransformerNet，实例化
     optimizer = Adam(transformer.parameters(), args.lr)
     mse_loss = torch.nn.MSELoss()
 
     vgg = Vgg16(requires_grad=False).to(device)
-    style_transform = transforms.Compose([
+    style_transform = transforms.Compose([      # 针对style image的transform
         transforms.ToTensor(),                  # PIL image会转成Tensor，从（C*H*W）到（H*W*C），且从[0,255]到[0.0,1.0]。
                                                 # Converts a PIL Image or numpy.ndarray (H x W x C) in the range [0, 255] to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0] if the PIL Image belongs to one of the modes (L, LA, P, I, F, RGB, YCbCr, RGBA, CMYK, 1) or if the numpy.ndarray has dtype = np.uint8
         transforms.Lambda(lambda x: x.mul(255)) # x中每个数乘以255，为什么？相当于只是转成tensor，但是每个值没有做归一化，范围还是在[0,255]
@@ -104,27 +104,30 @@ def train(args):
         agg_style_loss = 0.
         count = 0
         for batch_id, (x, _) in enumerate(train_loader):    # (x, _)表示data，其中x表示？
-            n_batch = len(x)                                # n_batch到底表示什么？
+            n_batch = len(x)                                # n_batch到底表示什么？猜测刚好等于batch_size
             count += n_batch
             optimizer.zero_grad()
 
-            x = x.to(device)
-            y = transformer(x)
+            x = x.to(device)                # x是数据集中的原始图片（已经转化为Tensor了）
+            y = transformer(x)              # y是x经过transform网络后的结果
 
-            y = utils.normalize_batch(y)
-            x = utils.normalize_batch(x)
+            y = utils.normalize_batch(y)    # y归一化
+            x = utils.normalize_batch(x)    # x归一化
 
             features_y = vgg(y)
             features_x = vgg(x)
 
+            # 计算contentloss，x和y分别经过预训练模型vgg后的feature之间的loss
             content_loss = args.content_weight * mse_loss(features_y.relu2_2, features_x.relu2_2)
 
+            # 计算styleloss
             style_loss = 0.
             for ft_y, gm_s in zip(features_y, gram_style):
                 gm_y = utils.gram_matrix(ft_y)
-                style_loss += mse_loss(gm_y, gm_s[:n_batch, :, :])
+                style_loss += mse_loss(gm_y, gm_s[:n_batch, :, :])  # gm_s[:n_batch, :, :]中的索引":n_batch"，表示取从以一个元素到索引为n_batch的元素（不包括n_batch）
             style_loss *= args.style_weight
 
+            # 计算totalloss
             total_loss = content_loss + style_loss
             total_loss.backward()
             optimizer.step()
